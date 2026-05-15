@@ -22,8 +22,8 @@ class MiAppPeliculas extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Catálogo de Películas',
       theme: ThemeData(
-        primarySwatch: Colors.indigo,
         useMaterial3: true,
+        colorSchemeSeed: Colors.indigo,
       ),
       home: const PantallaInicio(),
     );
@@ -42,6 +42,11 @@ class _PantallaInicioState extends State<PantallaInicio> {
   final TextEditingController directorController = TextEditingController();
   final TextEditingController anioController = TextEditingController();
 
+  String generoSeleccionado = 'Acción';
+  int calificacionSeleccionada = 5;
+
+  final List<String> generos = ['Acción', 'Drama', 'Comedia', 'Terror', 'Sci-Fi'];
+
   Future<void> agregarPelicula() async {
     if (tituloController.text.isEmpty ||
         directorController.text.isEmpty ||
@@ -56,12 +61,19 @@ class _PantallaInicioState extends State<PantallaInicio> {
       'titulo': tituloController.text,
       'director': directorController.text,
       'anio': int.tryParse(anioController.text) ?? 0,
-      'fechaRegistro': DateTime.now(),
+      'genero': generoSeleccionado,
+      'calificacion': calificacionSeleccionada,
+      'fechaRegistro': FieldValue.serverTimestamp(),
     });
 
     tituloController.clear();
     directorController.clear();
     anioController.clear();
+
+    setState(() {
+      generoSeleccionado = 'Acción';
+      calificacionSeleccionada = 5;
+    });
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Película agregada correctamente')),
@@ -69,10 +81,159 @@ class _PantallaInicioState extends State<PantallaInicio> {
   }
 
   Future<void> eliminarPelicula(String id) async {
-    await FirebaseFirestore.instance.collection('peliculas').doc(id).delete();
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Eliminar película'),
+          content: const Text('¿Seguro que deseas eliminar esta película?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Película eliminada')),
+    if (confirmar == true) {
+      await FirebaseFirestore.instance.collection('peliculas').doc(id).delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Película eliminada')),
+      );
+    }
+  }
+
+  Future<void> editarPelicula(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    final TextEditingController editarTitulo =
+        TextEditingController(text: data['titulo'] ?? '');
+    final TextEditingController editarDirector =
+        TextEditingController(text: data['director'] ?? '');
+    final TextEditingController editarAnio =
+        TextEditingController(text: '${data['anio'] ?? ''}');
+
+    String editarGenero = data['genero'] ?? 'Acción';
+    int editarCalificacion = data['calificacion'] ?? 5;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Editar película'),
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: editarTitulo,
+                      decoration: const InputDecoration(
+                        labelText: 'Título',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: editarDirector,
+                      decoration: const InputDecoration(
+                        labelText: 'Director',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: editarAnio,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Año',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: editarGenero,
+                      decoration: const InputDecoration(
+                        labelText: 'Género',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: generos.map((genero) {
+                        return DropdownMenuItem(
+                          value: genero,
+                          child: Text(genero),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          editarGenero = value!;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: editarCalificacion,
+                      decoration: const InputDecoration(
+                        labelText: 'Calificación',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: List.generate(5, (index) {
+                        final valor = index + 1;
+                        return DropdownMenuItem(
+                          value: valor,
+                          child: Text('$valor estrellas'),
+                        );
+                      }),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          editarCalificacion = value!;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await FirebaseFirestore.instance
+                        .collection('peliculas')
+                        .doc(id)
+                        .update({
+                      'titulo': editarTitulo.text,
+                      'director': editarDirector.text,
+                      'anio': int.tryParse(editarAnio.text) ?? 0,
+                      'genero': editarGenero,
+                      'calificacion': editarCalificacion,
+                      'fechaActualizacion': FieldValue.serverTimestamp(),
+                    });
+
+                    Navigator.pop(context);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Película actualizada correctamente'),
+                      ),
+                    );
+                  },
+                  child: const Text('Guardar cambios'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -178,6 +339,47 @@ class _PantallaInicioState extends State<PantallaInicio> {
                       border: OutlineInputBorder(),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: generoSeleccionado,
+                    decoration: const InputDecoration(
+                      labelText: 'Género',
+                      prefixIcon: Icon(Icons.category),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: generos.map((genero) {
+                      return DropdownMenuItem(
+                        value: genero,
+                        child: Text(genero),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        generoSeleccionado = value!;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: calificacionSeleccionada,
+                    decoration: const InputDecoration(
+                      labelText: 'Calificación',
+                      prefixIcon: Icon(Icons.star),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: List.generate(5, (index) {
+                      final valor = index + 1;
+                      return DropdownMenuItem(
+                        value: valor,
+                        child: Text('$valor estrellas'),
+                      );
+                    }),
+                    onChanged: (value) {
+                      setState(() {
+                        calificacionSeleccionada = value!;
+                      });
+                    },
+                  ),
                   const SizedBox(height: 15),
                   ElevatedButton.icon(
                     onPressed: agregarPelicula,
@@ -186,27 +388,6 @@ class _PantallaInicioState extends State<PantallaInicio> {
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: 30),
-
-            const Text(
-              'Categorías principales',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                categoriaItem('Acción', Icons.local_fire_department),
-                categoriaItem('Drama', Icons.theater_comedy),
-                categoriaItem('Comedia', Icons.sentiment_satisfied),
-              ],
             ),
 
             const SizedBox(height: 30),
@@ -252,12 +433,14 @@ class _PantallaInicioState extends State<PantallaInicio> {
                     final pelicula = peliculas[index];
                     final data = pelicula.data() as Map<String, dynamic>;
 
+                    final int calificacion = data['calificacion'] ?? 0;
+
                     return Container(
                       margin: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 8,
                       ),
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(18),
@@ -284,15 +467,46 @@ class _PantallaInicioState extends State<PantallaInicio> {
                             fontSize: 18,
                           ),
                         ),
-                        subtitle: Text(
-                          '${data['director'] ?? 'Sin director'} - ${data['anio'] ?? ''}',
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${data['director'] ?? 'Sin director'} - ${data['anio'] ?? ''}',
+                            ),
+                            Text('Género: ${data['genero'] ?? 'Sin género'}'),
+                            Row(
+                              children: List.generate(5, (index) {
+                                return Icon(
+                                  index < calificacion
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  color: Colors.amber,
+                                  size: 18,
+                                );
+                              }),
+                            ),
+                          ],
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(
-                            Icons.delete,
-                            color: Colors.redAccent,
-                          ),
-                          onPressed: () => eliminarPelicula(pelicula.id),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit,
+                                color: Colors.indigo,
+                              ),
+                              onPressed: () =>
+                                  editarPelicula(pelicula.id, data),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete,
+                                color: Colors.redAccent,
+                              ),
+                              onPressed: () =>
+                                  eliminarPelicula(pelicula.id),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -304,37 +518,6 @@ class _PantallaInicioState extends State<PantallaInicio> {
             const SizedBox(height: 30),
           ],
         ),
-      ),
-    );
-  }
-
-  static Widget categoriaItem(String titulo, IconData icono) {
-    return Container(
-      width: 100,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.blueAccent,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 5,
-            color: Colors.black12,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(icono, color: Colors.white, size: 30),
-          const SizedBox(height: 8),
-          Text(
-            titulo,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
       ),
     );
   }
