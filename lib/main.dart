@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-void main() {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const MiAppPeliculas());
 }
-
 class MiAppPeliculas extends StatelessWidget {
   const MiAppPeliculas({super.key});
 
@@ -19,6 +26,14 @@ class MiAppPeliculas extends StatelessWidget {
 
 class PantallaInicio extends StatelessWidget {
   const PantallaInicio({super.key});
+Future<void> agregarPelicula() async {
+  await FirebaseFirestore.instance.collection('peliculas').add({
+    'titulo': 'Interestelar',
+    'director': 'Christopher Nolan',
+    'anio': 2014,
+    'fechaRegistro': DateTime.now(),
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +71,14 @@ class PantallaInicio extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
+            const SizedBox(height: 20),
+
+ElevatedButton(
+  onPressed: agregarPelicula,
+  child: const Text('Agregar película a Firebase'),
+),
+
+const SizedBox(height: 30),
             const Text(
               'Categorías principales',
               style: TextStyle(
